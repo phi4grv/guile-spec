@@ -1,19 +1,56 @@
-#! /usr/bin/guile -s
+#!/bin/sh
+# vim: set filetype=scheme:
+exec guile -s "$0" "$@"
 !#
 
-;; Bootstrap
-(add-to-load-path "./module")
-(use-modules (spec suite)
-             (ice-9 getopt-long))
+(eval-when (expand load eval)
+  (define guile-spec-root
+    (let ((f (current-filename)))
+      (if f
+        (dirname f)
+        (getcwd))))
+
+  (define guile-spec-dir
+    (case-lambda
+      (() guile-spec-root)
+      ((path) (in-vicinity guile-spec-root path))))
+
+  (add-to-load-path
+    (guile-spec-dir "module")))
+
+(use-modules (ice-9 getopt-long)
+             (srfi srfi-171)
+             (spec suite))
+
+(define (option-values opts key)
+  (list-transduce
+    (compose
+      (tfilter (lambda (p) (eq? (car p) key)))
+      (tmap cdr))
+    reverse-rcons
+    opts))
 
 (define option-spec
-       '((version (single-char #\v) (value #f))
-         (help    (single-char #\h) (value #f))))
+  '((version (single-char #\v) (value #f))
+    (help    (single-char #\h) (value #f))
+    (load-path (single-char #\L) (value #t))))
 
 (define options (getopt-long (command-line) option-spec))
 
+(define (ensure-abspath path)
+  (or (and (absolute-file-name? path) path)
+      (in-vicinity (getcwd) path)))
+
+(for-each
+  (lambda (p)
+    (add-to-load-path (ensure-abspath p)))
+  (option-values options 'load-path))
+
+(define (load-from-cwd path)
+  (load-in-vicinity (getcwd) path))
+
 (define (run-specs)
-  (spec-run (map load (option-ref options '() #f))))
+  (spec-run (map load-from-cwd (option-ref options '() #f))))
 
 (define (main)
   (define (help-wanted?)
@@ -21,11 +58,13 @@
   (define (version-wanted?)
     (option-ref options 'version #f))
   (cond ((help-wanted?)
-         (display "guile-spec [files]\n")
+         (display "guile-spec [options] [files...]\n")
+         (display "\nOptions:\n")
+         (display "  -L, --load-path <path>   Add <path> to Guile load path\n")
          (exit))
         ((version-wanted?)
          (display "guile-spec version 0.1")
          (exit)))
- (run-specs))
+  (run-specs))
 
 (main)
