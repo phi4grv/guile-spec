@@ -52,8 +52,10 @@
   (unless (apply predicate args)
     (throw 'expect-error predicate args)))
 
+(define indent-width 2)
+
 (define (indent-display text indent)
-  (display (make-string indent #\tab))
+  (display (make-string (* indent indent-width) #\space))
   (display text)
   (newline))
 
