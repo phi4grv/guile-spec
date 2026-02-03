@@ -6,6 +6,7 @@
   #:export (describe
             it
             expect
+            spec-filter
             spec-run))
 
 (define-record-type <spec-suite>
@@ -159,3 +160,42 @@
 
 (define-syntax-rule (describe desc rest ...)
   (%describe desc #f #f rest ...))
+
+(define (filter-suite-tree match-desc? suite desc-prefix)
+  (define (full-desc desc-prefix desc)
+    (prefix-description desc-prefix desc))
+
+  (let ((here-desc (full-desc desc-prefix (suite-description suite))))
+    (cond
+      ((match-desc? here-desc)
+       suite)
+      (else
+        (let ((kept-children
+                (filter-map
+                  (lambda (child)
+                    (cond
+                      ((suite? child)
+                       (filter-suite-tree match-desc? child here-desc))
+                      ((spec? child)
+                       (and (match-desc?
+                              (full-desc here-desc (spec-description child)))
+                            child))
+                      (else
+                        #f)))
+                  (suite-specs suite))))
+          (and (pair? kept-children)
+               (make-suite (suite-description suite)
+                           (suite-before-each suite)
+                           (suite-after-each suite)
+                           kept-children)))))))
+
+(define (make-desc-matcher pattern)
+  (let ((rx (make-regexp pattern)))
+    (lambda (desc)
+      (and (regexp-exec rx desc) #t))))
+
+(define (spec-filter pattern suites)
+  (if (and pattern (not (string=? pattern "")))
+    (let ((match-desc? (make-desc-matcher pattern)))
+      (filter-map (lambda (s) (filter-suite-tree match-desc? s "")) suites))
+    suites))

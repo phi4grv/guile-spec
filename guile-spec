@@ -33,6 +33,7 @@ exec guile -s "$0" "$@"
 (define option-spec
   '((version (single-char #\v) (value #f))
     (help    (single-char #\h) (value #f))
+    (filter  (single-char #\f) (value #t))
     (load-path (single-char #\L) (value #t))))
 
 (define options (getopt-long (command-line) option-spec))
@@ -50,7 +51,11 @@ exec guile -s "$0" "$@"
   (load-in-vicinity (getcwd) path))
 
 (define (run-specs)
-  (spec-run (map load-from-cwd (option-ref options '() #f))))
+  (let* ((filter  (option-ref options 'filter #f))
+         (files   (option-ref options '() '()))
+         (suites  (map load-from-cwd files))
+         (suites* (spec-filter filter suites)))
+    (spec-run suites*)))
 
 (define (main)
   (define (help-wanted?)
@@ -60,7 +65,8 @@ exec guile -s "$0" "$@"
   (cond ((help-wanted?)
          (display "guile-spec [options] [files...]\n")
          (display "\nOptions:\n")
-         (display "  -L, --load-path <path>   Add <path> to Guile load path\n")
+         (display "  -f, --filter <regex>   Filter specs by regex on spec descriptions\n")
+         (display "  -L, --load-path <path> Add <path> to Guile load path\n")
          (exit))
         ((version-wanted?)
          (display "guile-spec version 0.1")
